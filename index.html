@@ -1,86 +1,421 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Seguimiento Diario de Postulaciones</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; padding: 20px; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .setup-section, .input-section { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
-        input, button { padding: 10px; margin: 5px; border-radius: 4px; border: 1px solid #ccc; }
-        button { background: #28a745; color: white; border: none; cursor: pointer; }
-        button.delete { background: #dc3545; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
-        th { background-color: #f8f9fa; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitácora de postulaciones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#F1F3EC; --surface:#FFFFFF; --surface-alt:#E6ECE0; --ink:#182419;
+    --ink-soft:#59685D; --ink-faint:#8B978C; --primary:#2E6B4C; --primary-dark:#1E4B35;
+    --primary-tint:#E1EEE5; --accent:#C1791F; --accent-tint:#F7EBD8;
+    --danger:#AE3A3A; --danger-tint:#F7E6E6; --border:#DADFD2; --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:900px;margin:0 auto;padding:28px 20px 60px;}
+  h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;margin:0;color:var(--ink);}
+  .top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
+  .top h1{font-size:28px;letter-spacing:-0.01em;}
+  .top p{margin:4px 0 0;color:var(--ink-soft);font-size:14px;}
+  .top-right{display:flex;align-items:center;gap:12px;}
+  .datebadge{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-soft);background:var(--surface);border:1px solid var(--border);padding:6px 12px;border-radius:999px;}
+  .user-chip{font-size:12.5px;color:var(--ink-soft);}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;}
+  .hero{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;margin-bottom:20px;}
+  @media (max-width:640px){.hero{grid-template-columns:1fr;}}
+  .hero-main .num{font-family:'Fraunces',serif;font-size:52px;font-weight:600;line-height:1;letter-spacing:-0.02em;}
+  .hero-main .num-row{display:flex;align-items:baseline;gap:10px;}
+  .of{font-family:'IBM Plex Mono',monospace;font-size:16px;color:var(--ink-faint);}
+  .label{color:var(--ink-soft);font-size:13px;margin-top:2px;}
+  .status-pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;padding:5px 12px;border-radius:999px;margin-top:12px;}
+  .status-ok{background:var(--primary-tint);color:var(--primary-dark);}
+  .status-pending{background:var(--accent-tint);color:#7A4D14;}
+
+  .week-strip{display:flex;gap:6px;align-items:flex-end;height:110px;margin-top:14px;}
+  .day-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;}
+  .day-bar-track{flex:1;width:100%;display:flex;align-items:flex-end;position:relative;}
+  .day-bar{width:100%;background:var(--surface-alt);border-radius:4px 4px 0 0;position:relative;transition:height .25s ease;min-height:2px;}
+  .day-bar.met{background:var(--primary);}
+  .day-bar.today{outline:2px solid var(--accent);outline-offset:1px;}
+  .goal-line{position:absolute;left:-4px;right:-4px;border-top:1.5px dashed var(--ink-faint);}
+  .day-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-faint);}
+  .day-count{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);}
+
+  .section-title{font-size:16px;margin:26px 0 12px;display:flex;align-items:center;gap:8px;}
+  .section-title .streak{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:400;color:var(--ink-soft);background:var(--surface-alt);padding:3px 10px;border-radius:999px;}
+
+  .goals-row{display:flex;gap:20px;margin-top:14px;flex-wrap:wrap;}
+  .goal-field{display:flex;flex-direction:column;gap:4px;}
+  .goal-field label{font-size:12px;color:var(--ink-soft);}
+  .goal-field input{width:80px;}
+
+  input[type=number], input[type=text], input[type=email], input[type=password]{
+    font-family:'IBM Plex Mono',monospace;font-size:14px;padding:8px 10px;border:1px solid var(--border);
+    border-radius:8px;background:var(--surface);color:var(--ink);
+  }
+  input[type=text],input[type=email],input[type=password]{font-family:'Inter',sans-serif;}
+  input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-tint);}
+
+  .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:14px;}
+  .portal-field{display:flex;flex-direction:column;gap:5px;}
+  .portal-field label{font-size:13px;color:var(--ink);display:flex;justify-content:space-between;align-items:center;}
+  .portal-field .rm{cursor:pointer;color:var(--ink-faint);font-size:12px;border:none;background:none;padding:0;}
+  .portal-field .rm:hover{color:var(--danger);}
+  .portal-field input{width:100%;}
+
+  .add-portal-row{display:flex;gap:8px;margin-top:14px;}
+  .add-portal-row input{flex:1;}
+
+  button{font-family:'Inter',sans-serif;font-size:14px;font-weight:500;padding:9px 16px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink);cursor:pointer;}
+  button:hover{background:var(--surface-alt);}
+  button.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+  button.primary:hover{background:var(--primary-dark);}
+  button:active{transform:scale(.98);}
+  .save-row{display:flex;justify-content:flex-end;margin-top:16px;}
+  .save-msg{font-size:13px;color:var(--primary-dark);align-self:center;margin-right:12px;opacity:0;transition:opacity .3s;}
+  .save-msg.show{opacity:1;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:right;padding:9px 8px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;}
+  th:first-child,td:first-child{text-align:left;font-family:'Inter',sans-serif;}
+  th{color:var(--ink-soft);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;}
+  td.total{font-weight:600;color:var(--primary-dark);}
+  tr:last-child td{border-bottom:none;}
+  .del-btn{border:none;background:none;color:var(--ink-faint);cursor:pointer;font-size:16px;padding:2px 6px;}
+  .del-btn:hover{color:var(--danger);}
+  .empty-hist{color:var(--ink-faint);font-size:13px;padding:16px 0;text-align:center;}
+
+  .search-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
+  .search-row input{flex:1;min-width:160px;}
+  .portal-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .portal-link{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink);text-decoration:none;font-size:13.5px;font-weight:500;}
+  .portal-link:hover{background:var(--surface-alt);}
+  .portal-link .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);}
+
+  .loading{color:var(--ink-faint);font-size:14px;padding:40px 0;text-align:center;}
+  .reset-link{font-size:12px;color:var(--ink-faint);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;margin-top:22px;}
+
+  .auth-wrap{max-width:380px;margin:80px auto;padding:0 20px;}
+  .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px 26px;}
+  .auth-card h1{font-size:24px;margin-bottom:6px;}
+  .auth-card p{color:var(--ink-soft);font-size:13.5px;margin:0 0 20px;}
+  .auth-field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
+  .auth-field label{font-size:12.5px;color:var(--ink-soft);}
+  .auth-field input{width:100%;}
+  .auth-error{background:var(--danger-tint);color:#7A2424;font-size:13px;padding:8px 12px;border-radius:8px;margin-bottom:14px;display:none;}
+  .auth-error.show{display:block;}
+  .auth-actions{display:flex;flex-direction:column;gap:8px;margin-top:6px;}
+  .auth-switch{font-size:13px;color:var(--ink-soft);text-align:center;margin-top:16px;}
+  .auth-switch a{color:var(--primary-dark);cursor:pointer;text-decoration:underline;}
+  .config-warning{max-width:520px;margin:60px auto;padding:20px;background:var(--accent-tint);border-radius:12px;font-size:14px;line-height:1.6;color:#6B4712;}
+  .config-warning code{background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:4px;font-size:13px;}
+</style>
 </head>
 <body>
-
-<div class="container">
-    <h2>Registro Diario de Postulaciones</h2>
-
-    <div class="setup-section">
-        <h3>Configurar Portales</h3>
-        <input type="text" id="nuevoPortal" placeholder="Nombre del portal">
-        <button onclick="agregarPortal()">Agregar Portal</button>
-        <div id="listaPortales"></div>
-    </div>
-
-    <div class="input-section">
-        <h3>Registrar Postulaciones de Hoy</h3>
-        <div id="inputsRegistro"></div>
-        <button onclick="guardarRegistro()">Guardar Registro de Hoy</button>
-    </div>
-
-    <table id="tablaHistorica">
-        <thead><tr id="encabezados"><th>Fecha</th></tr></thead>
-        <tbody></tbody>
-    </table>
+<div id="root">
+  <div class="loading">Cargando…</div>
 </div>
 
 <script>
-    let portales = JSON.parse(localStorage.getItem('portales') || '["Indeed", "Bumeran", "Computrabajo"]');
-    let registros = JSON.parse(localStorage.getItem('registros') || '[]');
+/* =========================================================
+   1) PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE
+   La encuentras en: Configuración del proyecto → Tus apps → SDK setup
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCM4Yk41rZnUkTZBDYe--mwtem_5X139Ag",
+  authDomain: "postulaciones-tracker.firebaseapp.com",
+  projectId: "postulaciones-tracker",
+  storageBucket: "postulaciones-tracker.firebasestorage.app",
+  messagingSenderId: "753154636455",
+  appId: "1:753154636455:web:cab3c30967967df2cef982"
+};
 
-    function renderizar() {
-        // Renderizar Portales
-        let listaDiv = document.getElementById('listaPortales');
-        listaDiv.innerHTML = portales.map((p, i) => 
-            `${p} <button class="delete" onclick="eliminarPortal(${i})">X</button> `).join('');
+const root = document.getElementById('root');
 
-        // Renderizar Inputs
-        let inputsDiv = document.getElementById('inputsRegistro');
-        inputsDiv.innerHTML = portales.map(p => 
-            `<input type="number" id="val_${p}" placeholder="${p}">`).join('');
+if(!firebaseConfig.apiKey || firebaseConfig.apiKey === "TU_API_KEY"){
+  root.innerHTML = `<div class="config-warning">
+    <strong>Falta configurar Firebase.</strong><br><br>
+    Abre este archivo, busca el bloque <code>firebaseConfig</code> cerca del inicio del &lt;script&gt;,
+    y reemplaza los valores con los de tu propio proyecto de Firebase (Configuración del proyecto → SDK setup).
+    Sigue la guía que te dieron junto con este archivo.
+  </div>`;
+} else {
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
 
-        // Renderizar Tabla
-        let thead = document.getElementById('encabezados');
-        thead.innerHTML = '<th>Fecha</th>' + portales.map(p => `<th>${p}</th>`).join('');
-        
-        let tbody = document.querySelector('#tablaHistorica tbody');
-        tbody.innerHTML = registros.map(r => 
-            `<tr><td>${r.fecha}</td>` + portales.map(p => `<td>${r.datos[p] || 0}</td>`).join('') + `</tr>`
-        ).join('');
+  const DEFAULT_PORTALS = ['Indeed','Bumeran','Computrabajo','CAPPER','Cerro Verde'];
+  const DEFAULT_GOALS = { daily: 10, weekly: 50 };
+  const KNOWN_SEARCH = {
+    'Indeed': k => `https://pe.indeed.com/jobs?q=${encodeURIComponent(k)}`,
+    'Bumeran': k => `https://www.bumeran.com.pe/empleos-busqueda-${encodeURIComponent(k.trim().replace(/\s+/g,'-'))}.html`,
+    'Computrabajo': k => `https://pe.computrabajo.com/trabajos-de-${encodeURIComponent(k.trim().replace(/\s+/g,'-'))}`,
+    'LinkedIn': k => `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(k)}`
+  };
+
+  let config = { portals: [...DEFAULT_PORTALS], goals: {...DEFAULT_GOALS} };
+  let entries = {};
+  let currentUser = null;
+  let authMode = 'login';
+
+  function $(sel, r=document){ return r.querySelector(sel); }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function todayStr(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function parseDate(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+  function fmtShort(ds){ return parseDate(ds).toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit'}); }
+  function isoWeekStart(date){ const d = new Date(date); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); d.setHours(0,0,0,0); return d; }
+  function dateStrFromDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function totalFor(ds){ const rec = entries[ds]; if(!rec) return 0; return Object.values(rec).reduce((a,b)=>a+(Number(b)||0),0); }
+  function currentWeekDates(){ const start = isoWeekStart(new Date()); const days=[]; for(let i=0;i<7;i++){ const d=new Date(start); d.setDate(start.getDate()+i); days.push(dateStrFromDate(d)); } return days; }
+  function computeStreak(){
+    let streak=0; let d=new Date(); d.setHours(0,0,0,0);
+    while(true){ const ds=dateStrFromDate(d); if(totalFor(ds)>=config.goals.daily && entries[ds]){ streak++; d.setDate(d.getDate()-1); } else break; }
+    return streak;
+  }
+
+  async function loadCloudData(){
+    const doc = await db.collection('usuarios').doc(currentUser.uid).get();
+    if(doc.exists){
+      const data = doc.data();
+      config = { portals: (data.config && data.config.portals && data.config.portals.length) ? data.config.portals : [...DEFAULT_PORTALS], goals: (data.config && data.config.goals) || {...DEFAULT_GOALS} };
+      entries = data.entries || {};
+    } else {
+      config = { portals: [...DEFAULT_PORTALS], goals: {...DEFAULT_GOALS} };
+      entries = {};
     }
+  }
+  async function saveCloudData(){
+    try{
+      await db.collection('usuarios').doc(currentUser.uid).set({ config, entries, updatedAt: Date.now() });
+    }catch(e){ console.error('No se pudo guardar en la nube', e); alert('No se pudo guardar. Revisa tu conexión.'); }
+  }
 
-    function agregarPortal() {
-        let nombre = document.getElementById('nuevoPortal').value;
-        if(nombre) { portales.push(nombre); localStorage.setItem('portales', JSON.stringify(portales)); renderizar(); }
+  function renderAuth(errorMsg){
+    root.innerHTML = `
+      <div class="auth-wrap">
+        <div class="auth-card">
+          <h1>${authMode==='login' ? 'Inicia sesión' : 'Crea tu cuenta'}</h1>
+          <p>${authMode==='login' ? 'Entra con tu correo para ver tu bitácora de postulaciones.' : 'Regístrate para guardar tu bitácora y verla en todos tus dispositivos.'}</p>
+          <div class="auth-error ${errorMsg?'show':''}">${errorMsg||''}</div>
+          <div class="auth-field"><label>Correo</label><input type="email" id="authEmail" placeholder="tucorreo@ejemplo.com"></div>
+          <div class="auth-field"><label>Contraseña</label><input type="password" id="authPassword" placeholder="Mínimo 6 caracteres"></div>
+          <div class="auth-actions">
+            <button class="primary" id="authSubmitBtn">${authMode==='login' ? 'Iniciar sesión' : 'Crear cuenta'}</button>
+          </div>
+          <div class="auth-switch">
+            ${authMode==='login'
+              ? '¿No tienes cuenta? <a id="toSignup">Créala aquí</a>'
+              : '¿Ya tienes cuenta? <a id="toLogin">Inicia sesión</a>'}
+          </div>
+        </div>
+      </div>`;
+    $('#authSubmitBtn').addEventListener('click', submitAuth);
+    document.querySelectorAll('#authEmail,#authPassword').forEach(inp=>{
+      inp.addEventListener('keydown', e=>{ if(e.key==='Enter') submitAuth(); });
+    });
+    const su = $('#toSignup'); if(su) su.addEventListener('click', ()=>{ authMode='signup'; renderAuth(); });
+    const sl = $('#toLogin'); if(sl) sl.addEventListener('click', ()=>{ authMode='login'; renderAuth(); });
+  }
+
+  async function submitAuth(){
+    const email = $('#authEmail').value.trim();
+    const pass = $('#authPassword').value;
+    if(!email || !pass){ renderAuth('Ingresa tu correo y contraseña.'); return; }
+    try{
+      if(authMode==='login'){
+        await auth.signInWithEmailAndPassword(email, pass);
+      } else {
+        await auth.createUserWithEmailAndPassword(email, pass);
+      }
+    }catch(e){
+      renderAuth(traduceError(e));
     }
+  }
 
-    function eliminarPortal(i) { portales.splice(i, 1); localStorage.setItem('portales', JSON.stringify(portales)); renderizar(); }
+  function traduceError(e){
+    const code = e.code || '';
+    if(code.includes('user-not-found')) return 'No existe una cuenta con ese correo.';
+    if(code.includes('wrong-password')) return 'Contraseña incorrecta.';
+    if(code.includes('email-already-in-use')) return 'Ya existe una cuenta con ese correo. Inicia sesión.';
+    if(code.includes('weak-password')) return 'La contraseña debe tener al menos 6 caracteres.';
+    if(code.includes('invalid-email')) return 'Ese correo no es válido.';
+    return 'Algo salió mal. Intenta de nuevo.';
+  }
 
-    function guardarRegistro() {
-        let datos = {};
-        portales.forEach(p => datos[p] = document.getElementById('val_' + p).value || 0);
-        registros.push({ fecha: new Date().toLocaleDateString(), datos });
-        localStorage.setItem('registros', JSON.stringify(registros));
-        renderizar();
+  function renderApp(){
+    const today = todayStr();
+    const todayTotal = totalFor(today);
+    const dailyMet = todayTotal >= config.goals.daily;
+    const weekDates = currentWeekDates();
+    const weekTotal = weekDates.reduce((a,ds)=>a+totalFor(ds),0);
+    const weeklyMet = weekTotal >= config.goals.weekly;
+    const streak = computeStreak();
+    const maxDay = Math.max(config.goals.daily, ...weekDates.map(totalFor), 1);
+    const dayNames = ['L','M','X','J','V','S','D'];
+
+    const weekBars = weekDates.map((ds,i)=>{
+      const c = totalFor(ds);
+      const h = Math.round((c/maxDay)*100);
+      const goalH = Math.round((config.goals.daily/maxDay)*100);
+      const isToday = ds===today;
+      const met = c >= config.goals.daily && !!entries[ds];
+      return `<div class="day-col">
+        <div class="day-count">${c}</div>
+        <div class="day-bar-track" style="height:74px;">
+          <div class="goal-line" style="bottom:${goalH}%;"></div>
+          <div class="day-bar ${met?'met':''} ${isToday?'today':''}" style="height:${h}%;"></div>
+        </div>
+        <div class="day-label">${dayNames[i]}</div>
+      </div>`;
+    }).join('');
+
+    const portalFormFields = config.portals.map(p=>{
+      const val = (entries[today] && entries[today][p]) ? entries[today][p] : '';
+      return `<div class="portal-field">
+        <label>${escapeHtml(p)}<button class="rm" data-rm-portal="${escapeHtml(p)}" title="Quitar portal">✕</button></label>
+        <input type="number" min="0" step="1" value="${val}" data-portal="${escapeHtml(p)}" class="portal-input">
+      </div>`;
+    }).join('');
+
+    const sortedDates = Object.keys(entries).sort().reverse();
+    const historyRows = sortedDates.map(ds=>{
+      const cells = config.portals.map(p=>`<td>${(entries[ds] && entries[ds][p]) || 0}</td>`).join('');
+      return `<tr><td>${fmtShort(ds)}</td>${cells}<td class="total">${totalFor(ds)}</td><td><button class="del-btn" data-del-date="${ds}" title="Eliminar registro">🗑</button></td></tr>`;
+    }).join('');
+
+    const portalHeaders = config.portals.map(p=>`<th>${escapeHtml(p)}</th>`).join('');
+    const searchLinks = [...new Set([...config.portals, 'LinkedIn'])].map(p=>`<a class="portal-link" href="#" data-search-portal="${escapeHtml(p)}"><span class="dot"></span>${escapeHtml(p)}</a>`).join('');
+
+    root.innerHTML = `
+      <div class="wrap">
+        <div class="top">
+          <div>
+            <h1>Bitácora de postulaciones</h1>
+            <p>Registra cuántas veces postulas cada día y sigue tu meta.</p>
+          </div>
+          <div class="top-right">
+            <span class="user-chip">${escapeHtml(currentUser.email)}</span>
+            <button id="logoutBtn">Cerrar sesión</button>
+            <div class="datebadge">${parseDate(today).toLocaleDateString('es-PE',{weekday:'long', day:'numeric', month:'long'})}</div>
+          </div>
+        </div>
+
+        <div class="hero">
+          <div class="card hero-main">
+            <div class="num-row"><span class="num">${todayTotal}</span><span class="of">/ ${config.goals.daily} hoy</span></div>
+            <div class="label">Postulaciones registradas hoy</div>
+            <span class="status-pill ${dailyMet?'status-ok':'status-pending'}">${dailyMet ? '✓ Meta diaria cumplida' : `Faltan ${config.goals.daily - todayTotal} para tu meta`}</span>
+          </div>
+          <div class="card">
+            <div class="num-row"><span class="num" style="font-size:32px;">${weekTotal}</span><span class="of">/ ${config.goals.weekly} semana</span></div>
+            <div class="week-strip">${weekBars}</div>
+            <span class="status-pill ${weeklyMet?'status-ok':'status-pending'}" style="margin-top:10px;">${weeklyMet ? '✓ Meta semanal cumplida' : `Faltan ${config.goals.weekly - weekTotal} esta semana`}</span>
+          </div>
+        </div>
+
+        <div class="section-title">Metas <span class="streak">🔥 racha: ${streak} día${streak===1?'':'s'}</span></div>
+        <div class="card">
+          <div class="goals-row">
+            <div class="goal-field"><label>Meta diaria</label><input type="number" min="1" id="dailyGoalInput" value="${config.goals.daily}"></div>
+            <div class="goal-field"><label>Meta semanal</label><input type="number" min="1" id="weeklyGoalInput" value="${config.goals.weekly}"></div>
+            <button id="saveGoalsBtn" style="align-self:flex-end;">Guardar metas</button>
+          </div>
+        </div>
+
+        <div class="section-title">Registro de hoy</div>
+        <div class="card">
+          <div class="form-grid">${portalFormFields}</div>
+          <div class="add-portal-row">
+            <input type="text" id="newPortalInput" placeholder="Nombre de un nuevo portal, ej. LinkedIn">
+            <button id="addPortalBtn">Agregar portal</button>
+          </div>
+          <div class="save-row">
+            <span class="save-msg" id="saveMsg">Guardado</span>
+            <button class="primary" id="saveTodayBtn">Guardar registro de hoy</button>
+          </div>
+        </div>
+
+        <div class="section-title">Historial</div>
+        <div class="card" style="overflow-x:auto;">
+          ${sortedDates.length ? `<table><thead><tr><th>Fecha</th>${portalHeaders}<th>Total</th><th></th></tr></thead><tbody>${historyRows}</tbody></table>` : `<div class="empty-hist">Todavía no registras postulaciones. Guarda tu primer día arriba.</div>`}
+        </div>
+
+        <div class="section-title">Buscar empleo</div>
+        <div class="card">
+          <div class="search-row"><input type="text" id="keywordInput" placeholder="Puesto o palabra clave, ej. asistente administrativo"></div>
+          <div class="portal-links">${searchLinks}</div>
+        </div>
+
+        <button class="reset-link" id="resetBtn">Borrar todos mis datos</button>
+      </div>`;
+
+    bindAppEvents();
+  }
+
+  function bindAppEvents(){
+    document.querySelectorAll('[data-rm-portal]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        config.portals = config.portals.filter(x=>x!==btn.getAttribute('data-rm-portal'));
+        await saveCloudData(); renderApp();
+      });
+    });
+    $('#addPortalBtn').addEventListener('click', async ()=>{
+      const input = $('#newPortalInput'); const name = input.value.trim();
+      if(!name || config.portals.includes(name)){ input.value=''; return; }
+      config.portals.push(name); await saveCloudData(); renderApp();
+    });
+    $('#saveGoalsBtn').addEventListener('click', async ()=>{
+      const d = Math.max(1, parseInt($('#dailyGoalInput').value)||config.goals.daily);
+      const w = Math.max(1, parseInt($('#weeklyGoalInput').value)||config.goals.weekly);
+      config.goals = { daily: d, weekly: w }; await saveCloudData(); renderApp();
+    });
+    $('#saveTodayBtn').addEventListener('click', async ()=>{
+      const today = todayStr(); const rec = {};
+      document.querySelectorAll('.portal-input').forEach(inp=>{ rec[inp.getAttribute('data-portal')] = Math.max(0, parseInt(inp.value)||0); });
+      entries[today] = rec; await saveCloudData(); renderApp();
+      const msg = $('#saveMsg'); if(msg){ msg.classList.add('show'); setTimeout(()=>msg.classList.remove('show'),1800); }
+    });
+    document.querySelectorAll('[data-del-date]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{ delete entries[btn.getAttribute('data-del-date')]; await saveCloudData(); renderApp(); });
+    });
+    document.querySelectorAll('[data-search-portal]').forEach(a=>{
+      a.addEventListener('click', e=>{
+        e.preventDefault();
+        const p = a.getAttribute('data-search-portal');
+        const kw = $('#keywordInput').value.trim() || 'empleo';
+        const url = KNOWN_SEARCH[p] ? KNOWN_SEARCH[p](kw) : `https://www.google.com/search?q=${encodeURIComponent('trabajo empleo '+kw+' '+p+' Peru')}`;
+        window.open(url, '_blank');
+      });
+    });
+    $('#resetBtn').addEventListener('click', async ()=>{
+      if(!confirm('¿Seguro que quieres borrar toda tu bitácora? Esta acción no se puede deshacer.')) return;
+      config = { portals: [...DEFAULT_PORTALS], goals: {...DEFAULT_GOALS} }; entries = {};
+      await saveCloudData(); renderApp();
+    });
+    $('#logoutBtn').addEventListener('click', ()=> auth.signOut());
+  }
+
+  auth.onAuthStateChanged(async (user)=>{
+    if(user){
+      currentUser = user;
+      root.innerHTML = '<div class="loading">Cargando tu bitácora…</div>';
+      await loadCloudData();
+      renderApp();
+    } else {
+      currentUser = null;
+      authMode = 'login';
+      renderAuth();
     }
-
-    renderizar();
+  });
+}
 </script>
 </body>
 </html>
